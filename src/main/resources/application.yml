@@ -1,0 +1,9 @@
+##端口号
+server:
+  port: 8386
+##es地址
+spring:
+  data:
+    elasticsearch:
+      cluster-nodes: 127.0.0.1:9300
+      cluster-name: elasticsearch

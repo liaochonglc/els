@@ -1,7 +1,12 @@
 package com.es;
 
+import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.common.lucene.search.function.CombineFunction;
+import org.elasticsearch.common.lucene.search.function.FieldValueFactorFunction;
 import org.elasticsearch.index.query.*;
+import org.elasticsearch.index.query.functionscore.FieldValueFactorFunctionBuilder;
+import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
@@ -45,14 +50,13 @@ public class GoodsController {
     @RequestMapping("/save")
     public String save() {
         GoodsInfo goodsInfo = new GoodsInfo();
-        for(int i = 10;i< 20 ; i++){
-            System.out.println(i);
-            goodsInfo.setId(i);
-            goodsInfo.setCount(i);
+        /*for(int i = 15;i< 20 ; i++){*/
+            goodsInfo.setId(1);
+            goodsInfo.setCount(1);
             goodsInfo.setDescription("华为牛哦");
-            goodsInfo.setName("华为");
+            goodsInfo.setName("华为真的牛逼");
             goodsRepository.save(goodsInfo);
-        }
+        /*}*/
         return "success";
     }
 
@@ -87,7 +91,7 @@ public class GoodsController {
     public List<GoodsInfo> getGoodsList() {
         List<GoodsInfo> list = new ArrayList<>();
         Pageable pageable = new PageRequest(0, 10);
-        QueryBuilder queryBuilder = QueryBuilders.matchQuery("description", "1");
+        QueryBuilder queryBuilder = QueryBuilders.matchQuery("name", "华为");
         SearchQuery searchQuery = new NativeSearchQueryBuilder().withPageable(pageable)
                 .withQuery(queryBuilder).build();
         Iterable<GoodsInfo> search = goodsRepository.search(searchQuery);
@@ -104,7 +108,7 @@ public class GoodsController {
     public List<GoodsInfo> getColrList() {
         NativeSearchQueryBuilder searchQuery = new NativeSearchQueryBuilder();
         //查询关键字 BoolQueryBuilder和QueryBuilder的区别是 一个是链式 一个是单个
-        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery().must(QueryBuilders.matchQuery("name", "商品"));//下面可继续加query 组合查询
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery().must(QueryBuilders.matchQuery("name", "华为"));//下面可继续加query 组合查询
         //条件搜索
        /* searchQuery.withFilter(QueryBuilders.matchQuery("name","商品"));*/
         //排序
@@ -124,7 +128,8 @@ public class GoodsController {
                     //获取结果数据
                     Map<String, Object> result = hit.getSourceAsMap();
                    /* result.keySet().forEach(k->{
-                        System.out.println("---------"+result.get(k));
+                        System.out.println("---------"+result.get(k));-
+                        ----
                     });*/
                     String description = (String)result.get("description");
                     GoodsInfo goodsInfo = new GoodsInfo();
@@ -156,7 +161,7 @@ public class GoodsController {
         // 聚合查询。goodsSales是要统计的字段，sum_sales是自定义的别名
         TermsAggregationBuilder field = AggregationBuilders.terms("id_s").field("id");
         SumAggregationBuilder sumBuilder = AggregationBuilders.sum("sum").field("count");
-        sumBuilder.subAggregation(field);
+        field.subAggregation(sumBuilder);
         SearchQuery searchQuery = new NativeSearchQueryBuilder()
                 .withQuery(queryBuilder)
                 .addAggregation(sumBuilder)
@@ -167,6 +172,34 @@ public class GoodsController {
             return sum.getValue();
         });
         System.out.println(saleAmount);
+    }
+    @RequestMapping("/getScore")
+    public void getScore(){
+        SearchRequestBuilder searchRequestBuilder = elasticsearchTemplate.getClient().prepareSearch("lctest").setTypes("goods");
+        BoolQueryBuilder should = QueryBuilders.boolQuery().should(QueryBuilders.matchQuery("name", "真的牛逼"));
+        FieldValueFactorFunctionBuilder fieldQuery = new FieldValueFactorFunctionBuilder("count");
+        // 额外分数=log(1+score)
+        fieldQuery.factor(0.1f);
+        fieldQuery.modifier(FieldValueFactorFunction.Modifier.LOG1P);
+        // 最终分数=_score+额外分数
+        FunctionScoreQueryBuilder functionScoreQueryBuilder = QueryBuilders
+                .functionScoreQuery(should, fieldQuery)
+                .boostMode(CombineFunction.SUM);
+        //根据分值倒序排列 这个字段是固定的
+        searchRequestBuilder.addSort("_score", SortOrder.ASC);
+        searchRequestBuilder.setQuery(functionScoreQueryBuilder);
+        //设置获取位置个数
+        searchRequestBuilder.setFrom(0).setSize(100);
+        //设置查询分片,防止震荡问题,生产中可以用 用户id 填入,对同一个用户保证多次查询结果相同
+        searchRequestBuilder.setPreference("233");
+        SearchResponse searchResponse = searchRequestBuilder.get();
+        SearchHits hits = searchResponse.getHits();
+        for(SearchHit h:hits){
+            float score = h.getScore();
+            System.out.println(score);
+            Map<String, Object> sourceAsMap = h.getSourceAsMap();
+            System.out.println(sourceAsMap);
+        }
     }
 
 /*

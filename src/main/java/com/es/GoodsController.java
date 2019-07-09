@@ -50,13 +50,13 @@ public class GoodsController {
     @RequestMapping("/save")
     public String save() {
         GoodsInfo goodsInfo = new GoodsInfo();
-        /*for(int i = 15;i< 20 ; i++){*/
-            goodsInfo.setId(1);
-            goodsInfo.setCount(1);
+        for(int i = 15;i< 20 ; i++){
+            goodsInfo.setId(i);
+            goodsInfo.setCount(i);
             goodsInfo.setDescription("华为牛哦");
             goodsInfo.setName("华为真的牛逼");
             goodsRepository.save(goodsInfo);
-        /*}*/
+        }
         return "success";
     }
 
@@ -91,6 +91,7 @@ public class GoodsController {
     public List<GoodsInfo> getGoodsList() {
         List<GoodsInfo> list = new ArrayList<>();
         Pageable pageable = new PageRequest(0, 10);
+        //支持模糊查询
         QueryBuilder queryBuilder = QueryBuilders.matchQuery("name", "华为");
         SearchQuery searchQuery = new NativeSearchQueryBuilder().withPageable(pageable)
                 .withQuery(queryBuilder).build();
@@ -154,6 +155,7 @@ public class GoodsController {
         List<GoodsInfo> poems = page.getContent();
         return poems;
     }
+    //springdata
     @RequestMapping("/getCount")
     public void getCount(){
         QueryBuilder queryBuilder = QueryBuilders.boolQuery()
@@ -173,6 +175,8 @@ public class GoodsController {
         });
         System.out.println(saleAmount);
     }
+    //这是原生的方式
+    //field_value_factor
     @RequestMapping("/getScore")
     public void getScore(){
         SearchRequestBuilder searchRequestBuilder = elasticsearchTemplate.getClient().prepareSearch("lctest").setTypes("goods");
@@ -184,6 +188,7 @@ public class GoodsController {
         // 最终分数=_score+额外分数
         FunctionScoreQueryBuilder functionScoreQueryBuilder = QueryBuilders
                 .functionScoreQuery(should, fieldQuery)
+                //限制加强函数的最大效果
                 .boostMode(CombineFunction.SUM);
         //根据分值倒序排列 这个字段是固定的
         searchRequestBuilder.addSort("_score", SortOrder.ASC);
